@@ -1,0 +1,39 @@
+{
+  "name": "fargate-service-with-local-image",
+  "version": "1.0.0",
+  "description": "Running a load balanced service on Fargate with an image loaded locally",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "ci:deploy-review-app": "npx cdk deploy --require-approval never --all",
+    "ci:destroy-old-review-apps": "node ./stack-deletion/review-app-older-than.js",
+    "ci:destroy-all-review-apps": "node ./stack-deletion/review-apps-all.js",
+    "ci:destroy-review-apps-infra": "node ./stack-deletion/review-apps-infra.js",
+    "cdk": "cdk"
+  },
+  "author": {
+    "name": "Amazon Web Services",
+    "url": "https://aws.amazon.com",
+    "organization": true
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^8.10.38",
+    "typescript": "~3.7.2"
+  },
+  "dependencies": {
+    "@aws-cdk/aws-ec2": "*",
+    "@aws-cdk/aws-ecr": "*",
+    "@aws-cdk/aws-ecs": "*",
+    "@aws-cdk/aws-ecs-patterns": "*",
+    "@aws-cdk/aws-route53": "*",
+    "@aws-cdk/aws-route53-targets": "^1.87.1",
+    "@aws-cdk/core": "*",
+    "@aws-sdk/client-s3": "*",
+    "@aws-sdk/node-http-handler": "*",
+    "aws-sdk": "*",
+    "@octokit/core": "*",
+    "@octokit/rest": "18.*"
+  }
+}

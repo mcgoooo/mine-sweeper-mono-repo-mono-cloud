@@ -1,0 +1,138 @@
+# Javascript Node CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-javascript/ for more details
+#
+
+version: 2.1
+orbs:
+  pr-comment: benjlevesque/pr-comment@0.1.4
+  aws-cli: circleci/aws-cli@1.3.2
+
+executors:
+  node-lts:
+    docker:
+      - image: circleci/node:lts
+
+############
+# REUSABLE #
+############
+
+minesweeper_env: &minesweeper_env
+  executor: node-lts
+  working_directory: /mnt/ramdisk
+
+minesweeper_review_context: &minesweeper_review_context
+  context:
+    - aws
+    - minesweeper-review
+
+just_master: &just_master
+  filters:
+    branches:
+      only:
+        - master
+
+not_master: &not_master
+  filters:
+    branches:
+      ignore:
+        - master
+
+########
+# JOBS #
+########
+
+jobs:
+  test:
+    <<: *minesweeper_env
+    steps:
+      - checkout
+      - run: cd minesweeper-fargate && yarn install --frozen-lockfile
+      - run: cd minesweeper-fargate && yarn test
+
+  prettier:
+    <<: *minesweeper_env
+    steps:
+      - checkout
+      - run: cd minesweeper-fargate && yarn install --frozen-lockfile
+      - run: cd minesweeper-fargate && yarn prettier:difference
+
+  deploy_minesweeper_ra:
+    <<: *minesweeper_env
+    steps:
+      - checkout
+      - aws-cli/setup
+      - setup_remote_docker:
+          version: 19.03.13
+      - run:
+          name: deploy and notify
+          command: |
+            stty cols 200 && cd infra &&
+            export PR_NUMBER=${CIRCLE_PULL_REQUEST##*/} &&
+            yarn install --frozen-lockfile &&
+            yarn ci:deploy-review-app --verbose &&
+            PR_NUMBER=${CIRCLE_PULL_REQUEST##*/} node ./scripts/pr-comment.js
+
+  delete_old_review_apps:
+    <<: *minesweeper_env
+    steps:
+      - checkout
+      - aws-cli/setup
+      - run: cd infra && yarn install --frozen-lockfile
+      - run:
+          name: delete reviews apps that have not been updated in ${DELETE_REVIEW_APPS_AFTER_IN_MINUTES}
+          command: |
+            cd infra &&
+            yarn ci:destroy-old-review-apps
+
+  delete_review_apps_infra:
+    <<: *minesweeper_env
+    steps:
+      - checkout
+      - aws-cli/setup
+      - run: cd infra && yarn install --frozen-lockfile
+      - run:
+          name: delete all reviews apps and wait five minutes for stacks to delete
+          command: |
+            cd infra &&
+            yarn ci:destroy-all-review-apps
+            && sleep 300
+      - run:
+          name: delete all reviews apps infra
+          command: |
+            cd infra &&
+            yarn ci:destroy-review-apps-infra
+
+#############
+# WORKFLOWS #
+#############
+
+workflows:
+  on_commit:
+    jobs:
+      - test
+      - prettier
+      - deploy_minesweeper_ra:
+          <<: *minesweeper_review_context
+
+  #############
+  # CRON JOBS #
+  #############
+
+  delete_old_review_apps:
+    triggers:
+      - schedule:
+          cron: "19 * * * *"
+          <<: *just_master
+    jobs:
+      - delete_old_review_apps:
+          <<: *minesweeper_review_context
+
+  delete_review_apps_infra:
+    triggers:
+      - schedule:
+          cron: "00 21 * * *"
+          <<: *just_master
+    jobs:
+      - delete_review_apps_infra:
+          <<: *minesweeper_review_context
